@@ -1,55 +1,49 @@
 #include "udpsender.h"
 #include <QRandomGenerator>
 #include <QTime>
+#include <QDebug>
 
 
 UdpSender::UdpSender(QObject *parent)
     : QUdpSocket{parent}
 {
-
+    timer.setInterval(50);
+    connect(&timer, &QTimer::timeout, this, [this] {
+        const QByteArray datagram = packedStruct();
+        if (writeDatagram(datagram, destination, destinationPort) < 0)
+            qWarning() << "UDP send failed:" << errorString();
+    });
 }
 
-void UdpSender::newConnect(QString address, int port)
+bool UdpSender::newConnect(const QString &address, int port)
 {
-    QHostAddress hostAddress(address);
-    int counter = 0;
-    while(1) {
-        QByteArray datagram = packedStruct();
-        writeDatagram(datagram, hostAddress, port);
-        QThread::msleep(50);
-        qDebug()<<"send:"<<datagram.toHex()<<datagram.size()<<counter;
-        ++counter;
-    }
+    const QHostAddress hostAddress(address);
+    if (hostAddress.isNull() || port < 1 || port > 65535)
+        return false;
+    destination = hostAddress;
+    destinationPort = static_cast<quint16>(port);
+    timer.start();
+    return true;
 }
 
 QByteArray UdpSender::packedStruct(){
     QTime currentTime = QTime::currentTime();
-    DataStruct data;
+    DataStruct data{};
     static double fuel = 1000.0;
     data.hour=currentTime.hour();
     data.min=currentTime.minute();
     data.sec=currentTime.second();
     data.fuelWeight = fuel;
     fuel-=0.001;
-    data.dataUnion.data.addr=QRandomGenerator::global()->bounded(0, 255);
-    data.dataUnion.data.reserve1=QRandomGenerator::global()->bounded(0, 255);
+    data.dataUnion.data.addr=QRandomGenerator::global()->bounded(0, 256);
+    data.dataUnion.data.reserve1=QRandomGenerator::global()->bounded(0, 64);
     data.dataUnion.data.dataOk=QRandomGenerator::global()->bounded(0, 2);
     data.dataUnion.data.onLand=QRandomGenerator::global()->bounded(0, 2);
     data.dataUnion.data.speed=QRandomGenerator::global()->bounded(1, 5);
-    data.dataUnion.data.reserve2=QRandomGenerator::global()->bounded(0, 255);
+    data.dataUnion.data.reserve2=QRandomGenerator::global()->bounded(0, 8);
     data.dataUnion.data.matrix=QRandomGenerator::global()->bounded(0, 4);
     data.dataUnion.data.ctrlBit=QRandomGenerator::global()->bounded(0, 2);
     data.isCrashed=QRandomGenerator::global()->bounded(0, 2);
 
-    QByteArray array;
-    array.append(reinterpret_cast<const char*>(&data.hour),sizeof(data.hour));
-    array.append(reinterpret_cast<const char*>(&data.min),sizeof(data.min));
-    array.append(reinterpret_cast<const char*>(&data.sec),sizeof(data.sec));
-    array.append(reinterpret_cast<const char*>(&data.fuelWeight),sizeof(data.fuelWeight));
-    array.append(reinterpret_cast<const char*>(&data.dataUnion.word),sizeof(data.dataUnion.word));
-    array.append(reinterpret_cast<const char*>(&data.dataUnion.data),sizeof(data.dataUnion.data));
-    array.append(reinterpret_cast<const char*>(&data.isCrashed),sizeof(data.isCrashed));
-
-    return array;
+    return QByteArray(reinterpret_cast<const char*>(&data), sizeof(data));
 }
-

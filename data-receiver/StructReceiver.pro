@@ -15,6 +15,7 @@ SOURCES += \
 
 HEADERS += \
     dataStructs.h \
+    ../common/data.h \
     mainwindow.h \
     udpreceiver.h
 

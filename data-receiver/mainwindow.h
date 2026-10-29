@@ -19,7 +19,7 @@ public:
     void createTable(int width, QString backgroundColor, QString color);
 
 public slots:
-    void fillTable(QByteArray *data);
+    void fillTable(const QByteArray &data);
 
 private slots:
     void on_connectButton_clicked();
