@@ -8,17 +8,11 @@ class UdpReceiver : public QUdpSocket
 {
     Q_OBJECT
 public:
-    int clientPort;
-    QHostAddress *address;
-    QByteArray datagram;
-    int datagramSize;
-    QUdpSocket *socket = Q_NULLPTR;
-
     explicit UdpReceiver(QObject *parent = nullptr);
-    void newConnect(int port);
+    bool newConnect(int port);
 
  signals:
-    void receivedData(QByteArray*);
+    void receivedData(const QByteArray &datagram);
 
  public slots:
     void readMessage();

@@ -3,9 +3,8 @@
 #include <QByteArray>
 #include "dataStructs.h"
 #include <QDebug>
+#include <QStatusBar>
 
-DataStruct dataUnpack;
-DataStruct *pDataUnpack = &dataUnpack;
 
 const int structSize = sizeof(nameMassive)/sizeof(nameMassive[0]);
 
@@ -19,7 +18,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     createTable(700,"black","white");
-
+    receiver = new UdpReceiver(this);
+    connect(receiver, &UdpReceiver::receivedData, this, &MainWindow::fillTable);
 }
 
 MainWindow::~MainWindow()
@@ -83,9 +83,12 @@ int trueSpeed(unsigned int speed){
 }
 
 
-void MainWindow::fillTable(QByteArray *data)
+void MainWindow::fillTable(const QByteArray &data)
 {
-    pDataUnpack = reinterpret_cast<DataStruct*>(data->data());
+    DataStruct dataUnpack{};
+    if (!unpackData(data.constData(), data.size(), dataUnpack))
+        return;
+    const DataStruct *pDataUnpack = &dataUnpack;
 
     valueCells[0]->setNum(pDataUnpack->hour);
     valueCells[1]->setNum(pDataUnpack->min);
@@ -102,17 +105,23 @@ void MainWindow::fillTable(QByteArray *data)
     valueCells[12]->setNum(pDataUnpack->dataUnion.data.ctrlBit);
     valueCells[13]->setNum(pDataUnpack->isCrashed);
 
-    static int datagramCounter = 0;
+    static int datagramCounter = 1;
     ui->datagramCounter->setNum(datagramCounter);
     ++datagramCounter;
 }
 
 void MainWindow::on_connectButton_clicked()
 {
-    receiver = new UdpReceiver(this);
-    receiver->datagramSize = sizeof(DataStruct);
-    receiver->newConnect(ui->portPlace->toPlainText().toInt());
-    connect(receiver,SIGNAL(receivedData(QByteArray*)),this,SLOT(fillTable(QByteArray*)));
-    ui->portPlace->clear();
+    bool valid = false;
+    const int port = ui->portPlace->toPlainText().trimmed().toInt(&valid);
+    if (!valid || port < 1 || port > 65535) {
+        statusBar()->showMessage(tr("Enter a port from 1 to 65535."));
+        return;
+    }
+    if (!receiver->newConnect(port)) {
+        statusBar()->showMessage(tr("Cannot bind UDP port: %1").arg(receiver->errorString()));
+        return;
+    }
+    statusBar()->showMessage(tr("Listening on UDP port %1").arg(port));
 }
 

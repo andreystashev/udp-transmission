@@ -1,30 +1,36 @@
 #include "udpreceiver.h"
+#include "../common/data.h"
 
 
 UdpReceiver::UdpReceiver(QObject *parent)
     : QUdpSocket{parent}
 {
-
+    connect(this, &QUdpSocket::readyRead, this, &UdpReceiver::readMessage);
 }
 
-void UdpReceiver::newConnect(int port)
+bool UdpReceiver::newConnect(int port)
 {
-    clientPort = port;
-    address = new QHostAddress();
-
-    if(socket == Q_NULLPTR) {
-        socket = new QUdpSocket;
-
-    }
-    socket->bind(QHostAddress::Any,clientPort);
-    connect(socket,SIGNAL(readyRead()),this,SLOT(readMessage()));
+    if (port < 1 || port > 65535)
+        return false;
+    close();
+    return bind(QHostAddress::Any, static_cast<quint16>(port));
 }
 
 
 void UdpReceiver::readMessage()
 {
-    socket->readDatagram(datagram.data(),datagramSize,address);
-    emit receivedData(&datagram);
+    while (hasPendingDatagrams()) {
+        if (pendingDatagramSize() != static_cast<qint64>(sizeof(DataStruct))) {
+            readDatagram(nullptr, 0); // Discard the whole malformed datagram.
+            continue;
+        }
+        QByteArray datagram(sizeof(DataStruct), '\0');
+        if (readDatagram(datagram.data(), datagram.size()) != datagram.size())
+            continue;
+        DataStruct decoded{};
+        if (unpackData(datagram.constData(), datagram.size(), decoded))
+            emit receivedData(datagram);
+    }
 }
 
 
